@@ -12,6 +12,9 @@ const admin = require("firebase-admin");
 require('dotenv').config()
 const cors = require('cors');
 const app = express();
+const stripe = require('stripe')(process.env.STRIPE_SECRET)
+
+
 const port = process.env.PORT || 5000;
 
 
@@ -96,12 +99,22 @@ async function run() {
             const orders = await cursor.toArray();
             res.send(orders);
         })
+        app.get('/orders/:id', async (req, res) => {
+            const id = req.params.id;
+            console.log('getting specific order', id);
+            const query = { _id: ObjectId(id) };
+            const result = await orderCollection.findOne(query);
+            res.json(result);
+        })
 
         //get specific order
         app.get('/orders/:email', async (req, res) => {
             const result = await orderCollection.find({ email: req.params.email }).toArray();
             res.send(result);
         })
+
+
+
 
 
 
@@ -114,6 +127,18 @@ async function run() {
             res.json(result)
 
         });
+        app.put('/orders/:id', async (req, res) => {
+            const id = req.params.id;
+            const payment = req.body;
+            const filter = { _id: ObjectId(id) };
+            const updateDoc = {
+                $set: {
+                    payment: payment
+                }
+            };
+            const result = await orderCollection.updateOne(filter, updateDoc);
+            res.json(result);
+        })
 
         // Add new review
         app.post('/reviews', async (req, res) => {
@@ -193,6 +218,18 @@ async function run() {
             }
             res.json({ admin: isAdmin });
         })
+
+        app.post('/create-payment-intent', async (req, res) => {
+            const paymentInfo = req.body;
+            const amount = paymentInfo.price * 100;
+            const paymentIntent = await stripe.paymentIntents.create({
+                currency: 'usd',
+                amount: amount,
+                payment_method_types: ['card']
+            });
+            res.json({ clientSecret: paymentIntent.client_secret })
+        })
+
 
     }
     finally {
